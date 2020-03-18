@@ -1,5 +1,5 @@
 import numpy as np
-from utils import *
+from .utils import *
 
 class SAC_ReplayBuffer:
 	def __init__(self, observationDim, actionDim, maxSize):

@@ -54,4 +54,17 @@ class SAC:
 		self.numTestEpisodes = numTestEpisodes
 		self.maxEpochLen = maxEpochLen
 
-		self.ac = actorCritic()
+		# set env
+		self.env = env
+		self.testEnv = env
+		self.observationDim = env.observation_space.shape
+		self.actionDim = env.action_space.shape[0]
+
+		# Action limit for clamping, assumes all dimension share the same bound
+		actionLimit = env.action_space.high[0]
+
+		# build AC learning network and target network
+		self.ac = actorCritic(env.observation_space, env.action_space, **ACKwargs)
+		self.acTarget = actorCritic(env.observation_space, env.action_space, **ACKwargs)
+
+		# sync the parameters between two networks by hard-update

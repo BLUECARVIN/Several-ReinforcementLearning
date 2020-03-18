@@ -1,5 +1,5 @@
 from .utils import *
-from .QFunction import MLP_QFunction
+from .QFunction import *
 
 
 class MLP_ActorCritic(nn.Module):

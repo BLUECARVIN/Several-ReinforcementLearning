@@ -7,6 +7,7 @@ import time
 
 import gym
 import ReplayBuffer
+from Utils import *
 
 import torch
 import MLP
@@ -61,10 +62,24 @@ class SAC:
 		self.actionDim = env.action_space.shape[0]
 
 		# Action limit for clamping, assumes all dimension share the same bound
-		actionLimit = env.action_space.high[0]
+		self.actionLimit = env.action_space.high[0]
 
 		# build AC learning network and target network
 		self.ac = actorCritic(env.observation_space, env.action_space, **ACKwargs)
 		self.acTarget = actorCritic(env.observation_space, env.action_space, **ACKwargs)
 
 		# sync the parameters between two networks by hard-update
+		hard_update(self.acTarget, self.ac)
+		# Freeze target networks with respect to optimizers
+		for paras in acTarget.parameters():
+			paras.requires_grad = False
+
+		# List of parameters for both Q-Networks (for convenience)
+		self.q_params = itertools.chain(self.ac.q1.parameters(), self.ac.q2.parameters())
+
+		# Set Memory ReplayBuffer
+		self.replayBuffer = ReplayBuffer.SAC_ReplayBuffer(observationDim=self.observationDim,
+			actionDim=self.actionDim, maxSize=replayBufferSize)
+
+	# calculate loss
+	def compute_loss_q(self, data):

@@ -5,6 +5,7 @@ import numpy as np
 import itertools
 import time
 from pathlib import Path
+import tqdm
 
 import ReplayBuffer
 from Utils import *
@@ -175,7 +176,7 @@ class SAC:
  		return self.ac.act(observation, deterministic)
 
 	def test_agent(self, step=-1):
-		print("begin to test at {} step".format(step))
+		# print("begin to test at {} step".format(step))
 		for j in range(self.numTestEpisodes):
  			observation = self.testEnv.reset()
  			done = False
@@ -187,7 +188,7 @@ class SAC:
  				observation, reward, done, _ = self.testEnv.step(self.get_action(observation, True))
  				epochReward += reward
  				epochLength += 1
-		print("The epoch reward is {}, the epoch length is {}".format(epochReward, epochLength))
+		# print("The epoch reward is {}, the epoch length is {}".format(epochReward, epochLength))
 		return epochReward
 
 	# ============================== train ====================================
@@ -202,7 +203,7 @@ class SAC:
 		# for log
 		testReward = np.array([])
 
-		for t in range(totalSteps):
+		for t in tqdm.tqdm(range(totalSteps)):
 			# make actions
 			if t > self.startSteps:
 				action = self.get_action(observation)
@@ -244,5 +245,5 @@ class SAC:
 					torch.save(self.acTarget.state_dict(), self.savePath/'modelStateDict.pt')
 
 				# test
-				np.append(testReward, self.test_agent(t))
+				testReward = np.append(testReward, self.test_agent(t))
 				np.savez(self.savePath/'testReward.npz', hist=testReward)

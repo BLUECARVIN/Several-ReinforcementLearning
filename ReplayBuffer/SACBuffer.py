@@ -23,8 +23,8 @@ class SAC_ReplayBuffer:
 
 	def add(self, observation, action, reward, nextObservation, done):
 		# Add the data to the buffer and update the index and the size
-		self.observationBuffer1[self.index] = observation
-		self.nextObservationBuffer2[self.index] = nextObservation
+		self.observationBuffer[self.index] = observation
+		self.nextObservationBuffer[self.index] = nextObservation
 		self.rewardBuffer[self.index] = reward
 		self.actionBuffer[self.index] = action
 		self.doneBuffer[self.index] = done

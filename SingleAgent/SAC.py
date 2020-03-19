@@ -56,6 +56,7 @@ class SAC:
 		self.numTestEpisodes = numTestEpisodes
 		self.maxEpochLen = maxEpochLen
 		self.savePath = Path(savePath)
+		self.saveFreq = saveFreq
 
 		# set env
 		self.env = env
@@ -94,7 +95,7 @@ class SAC:
 		observation = torch.tensor(data['observation'], dtype=torch.float32).cuda()
 		action = torch.tensor(data['action'], dtype=torch.float32).cuda()
 		reward = torch.tensor(data['reward'], dtype=torch.float32).cuda()
-		nextObervation = torch.tensor(data['nextObervation'], dtype=torch.float32).cuda()
+		nextObervation = torch.tensor(data['nextObservation'], dtype=torch.float32).cuda()
 		done = torch.tensor(data['done'], dtype=torch.float32).cuda()
 
 		q1 = self.ac.q1(observation, action)
@@ -123,7 +124,7 @@ class SAC:
 
 	# calculate SAC pi loss
 	def compute_loss_pi(self, data):
-		observation = torch.tensor(data['observation'], dtype=torch.float32)
+		observation = torch.tensor(data['observation'], dtype=torch.float32).cuda()
 		pi, logProbPi = self.ac.pi(observation)
 		q1Pi = self.ac.q1(observation, pi)
 		q2Pi = self.ac.q2(observation, pi)
@@ -159,7 +160,7 @@ class SAC:
 		self.piOptimizer.step()
 
 		# Unfreeze Q-network, optimize it at next DDPG step
-		for p in qParams:
+		for p in self.qParams:
 			p.requires_grad = True
 
 		# wait for record
@@ -171,7 +172,7 @@ class SAC:
  	# ============================ test ======================================
 	def get_action(self, observation, deterministic=False):
  		observation = torch.tensor(observation, dtype=torch.float32).cuda()
- 		return self.ac.act(observation, deterministic)
+ 		return self.ac.act(observation, deterministic).detach().numpy()
 
 	def test_agent(self, step=-1):
 		print("begin to test at {} step".format(epoch))
@@ -202,10 +203,10 @@ class SAC:
 			if t > self.startSteps:
 				action = self.get_action(observation)
 			else:
-				action = env.action_space.sample()
+				action = self.env.action_space.sample()
 
 			# step the env
-			nextObervation, reward, done, _ = self.env.step()
+			nextObervation, reward, done, _ = self.env.step(action)
 			epochReward += reward
 			epochLength += 1
 
@@ -227,12 +228,12 @@ class SAC:
 			# update the network
 			if t >= self.updateAfter and t % self.updateEvery == 0:
 				for j in range(self.updateEvery):
-					batch = slef.replayBuffer.sample_batch(self.batchSize)
+					batch = self.replayBuffer.sample_batch(self.batchSize)
 					self.update(data=batch)
 
 			# enc of epoch
 			if (t+1) % self.stepsPerEpoch == 0:
-				epoch = (t+1) // steps_per_epoch
+				epoch = (t+1) // self.stepsPerEpoch
 
 				# save model
 				if (epoch % self.saveFreq == 0) or (epoch == self.maxEpochs):

@@ -26,12 +26,12 @@ class MLP_SquashedGaussianActor(nn.Module):
 		self.actLimit = actLimit
 
 	def forward(self, observation, deterministic=False, withLogProb=True):
-		netOut = self.net(obs)
+		netOut = self.net(observation)
 		# computer the \mu and \sigma of the gaussian
 		mu = self.muLayer(netOut)
 
 		logSTD = self.logSTDLayer(netOut)
-		logSTD = torch.clamp(logSTD, logSTDMin, logSTDMax)
+		logSTD = torch.clamp(logSTD, self.logSTDMin, self.logSTDMax)
 		std = torch.exp(logSTD)
 
 		# Pre-squash distribution and sample
@@ -45,8 +45,8 @@ class MLP_SquashedGaussianActor(nn.Module):
 
 		if withLogProb:
 			# Appendix C
-			logProPi = piDistribution.log_prob(piAction).sum(axis=-1)
-			logProPi -= (2 * (np.log(2) - piAction - F.softplus(-2*piAction))).sum(axis=-1)
+			logProPi = piDistribution.log_prob(piAction).sum(dim=-1)
+			logProPi -= (2 * (np.log(2) - piAction - F.softplus(-2*piAction))).sum(dim=-1)
 		else:
 			logProPi = None
 

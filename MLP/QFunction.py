@@ -13,3 +13,4 @@ class MLP_QFunction(nn.Module):
 	def forward(self, obs, act):
 		q = self.q(torch.cat([obs, act], dim=-1))
 		return torch.squeeze(q, -1)
+

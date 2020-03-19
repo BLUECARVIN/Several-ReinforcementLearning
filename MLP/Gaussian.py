@@ -1,6 +1,6 @@
 from .utils import *
 from .QFunction import *
-import torh
+import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.distributions.normal import Normal

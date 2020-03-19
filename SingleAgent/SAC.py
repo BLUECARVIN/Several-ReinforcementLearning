@@ -172,11 +172,11 @@ class SAC:
  	# ============================ test ======================================
 	def get_action(self, observation, deterministic=False):
  		observation = torch.tensor(observation, dtype=torch.float32).cuda()
- 		return self.ac.act(observation, deterministic).detach().numpy()
+ 		return self.ac.act(observation, deterministic)
 
 	def test_agent(self, step=-1):
-		print("begin to test at {} step".format(epoch))
-		for j in range(numTestEpisodes):
+		print("begin to test at {} step".format(step))
+		for j in range(self.numTestEpisodes):
  			observation = self.testEnv.reset()
  			done = False
  			epochReward = 0
@@ -188,6 +188,7 @@ class SAC:
  				epochReward += reward
  				epochLength += 1
 		print("The epoch reward is {}, the epoch length is {}".format(epochReward, epochLength))
+		return epochReward
 
 	# ============================== train ====================================
 	def train(self):
@@ -197,6 +198,9 @@ class SAC:
 		observation = self.env.reset()
 		epochReward = 0
 		epochLength = 0
+
+		# for log
+		testReward = np.array([])
 
 		for t in range(totalSteps):
 			# make actions
@@ -237,7 +241,8 @@ class SAC:
 
 				# save model
 				if (epoch % self.saveFreq == 0) or (epoch == self.maxEpochs):
-					torch.save(self.acTarget.stat_dict(), self.savePath/'modelStateDict.pt')
+					torch.save(self.acTarget.state_dict(), self.savePath/'modelStateDict.pt')
 
 				# test
-				self.test_agent(t)
+				np.append(testReward, self.test_agent(t))
+				np.savez(self.savePath/'testReward.npz', hist=testReward)

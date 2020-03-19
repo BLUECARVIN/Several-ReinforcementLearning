@@ -22,4 +22,4 @@ class MLP_ActorCritic(nn.Module):
 	def act(self, observation, deterministic=False):
 		with torch.no_grad():
 			action, _ = self.pi(observation, deterministic, False)
-			return action.numpy()
+			return action.detach().cpu().numpy()

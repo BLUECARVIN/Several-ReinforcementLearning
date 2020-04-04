@@ -2,42 +2,42 @@ import numpy as np
 from .utils import *
 
 class SAC_ReplayBuffer:
-	def __init__(self, observationDim, actionDim, maxSize):
+	def __init__(self, observation_dim, action_dim, max_size):
 		"""
 		A FIFO replay buffer for SAC.
 
 		Paras:
-			observationDim: the dimention of observation
-			actionDim:	the dimention of action
-			maxSize: the maximum size of the buffer
+			observation_dim: the dimention of observation
+			action_dim:	the dimention of action
+			max_size: the maximum size of the buffer
 		"""
-		self.observationBuffer = np.zeros(combined_shape(maxSize, observationDim), dtype=np.float32)
-		self.nextObservationBuffer = np.zeros(combined_shape(maxSize, observationDim), dtype=np.float32)
-		self.actionBuffer = np.zeros(combined_shape(maxSize, actionDim), dtype=np.float32)
-		self.rewardBuffer = np.zeros(maxSize, dtype=np.float32)
-		self.doneBuffer = np.zeros(maxSize, dtype=np.float32)
+		self.observation_buffer = np.zeros(combined_shape(max_size, observation_dim), dtype=np.float32)
+		self.next_observation_buffer = np.zeros(combined_shape(max_size, observation_dim), dtype=np.float32)
+		self.action_buffer = np.zeros(combined_shape(max_size, action_dim), dtype=np.float32)
+		self.reward_buffer = np.zeros(max_size, dtype=np.float32)
+		self.done_buffer = np.zeros(max_size, dtype=np.float32)
 
 		self.index = 0
 		self.size = 0
-		self.maxSize = maxSize
+		self.max_size = max_size
 
-	def add(self, observation, action, reward, nextObservation, done):
+	def add(self, observation, action, reward, next_observation, done):
 		# Add the data to the buffer and update the index and the size
-		self.observationBuffer[self.index] = observation
-		self.nextObservationBuffer[self.index] = nextObservation
-		self.rewardBuffer[self.index] = reward
-		self.actionBuffer[self.index] = action
-		self.doneBuffer[self.index] = done
+		self.observation_buffer[self.index] = observation
+		self.next_observation_buffer[self.index] = next_observation
+		self.reward_buffer[self.index] = reward
+		self.action_buffer[self.index] = action
+		self.done_buffer[self.index] = done
 
-		self.index = (self.index + 1) % self.maxSize
-		self.size = min(self.maxSize, self.size + 1)
+		self.index = (self.index + 1) % self.max_size
+		self.size = min(self.max_size, self.size + 1)
 
 	def sample_batch(self, batchSize=32):
 		batchSize = min(batchSize, self.size)
 		idx = np.random.randint(0, self.size, size=batchSize)
-		batch = dict(observation=self.observationBuffer[idx], 
-			nextObservation=self.nextObservationBuffer[idx], 
-			action=self.actionBuffer[idx],
-			reward=self.rewardBuffer[idx],
-			done=self.doneBuffer[idx])
+		batch = dict(observation=self.observation_buffer[idx], 
+			next_observation=self.next_observation_buffer[idx], 
+			action=self.action_buffer[idx],
+			reward=self.reward_buffer[idx],
+			done=self.done_buffer[idx])
 		return batch

@@ -8,48 +8,48 @@ from torch.distributions.normal import Normal
 
 class MLP_SquashedGaussianActor(nn.Module):
 	def __init__(self,
-		observationDim,
-		actionDim, 
-		hiddenSizes,
+		observation_dim,
+		action_dim, 
+		hidden_sizes,
 		activation,
-		actLimit):
+		act_limit):
 		super().__init__()
 
-		self.logSTDMax = 2
-		self.logSTDMin = -20
+		self.log_std_max = 2
+		self.log_std_min = -20
 
-		self.net = create_mlp([observationDim] + list(hiddenSizes),
+		self.net = create_mlp([observation_dim] + list(hidden_sizes),
 			activation,
 			activation)
-		self.muLayer = nn.Linear(hiddenSizes[-1], actionDim)
-		self.logSTDLayer = nn.Linear(hiddenSizes[-1], actionDim)
-		self.actLimit = actLimit
+		self.mu_layer = nn.Linear(hidden_sizes[-1], action_dim)
+		self.log_std_layer = nn.Linear(hidden_sizes[-1], action_dim)
+		self.act_limit = act_limit
 
-	def forward(self, observation, deterministic=False, withLogProb=True):
-		netOut = self.net(observation)
+	def forward(self, observation, deterministic=False, with_log_prob=True):
+		net_out = self.net(observation)
 		# computer the \mu and \sigma of the gaussian
-		mu = self.muLayer(netOut)
+		mu = self.mu_layer(net_out)
 
-		logSTD = self.logSTDLayer(netOut)
-		logSTD = torch.clamp(logSTD, self.logSTDMin, self.logSTDMax)
-		std = torch.exp(logSTD)
+		log_std = self.log_std_layer(net_out)
+		log_std = torch.clamp(log_std, self.log_std_min, self.log_std_max)
+		std = torch.exp(log_std)
 
 		# Pre-squash distribution and sample
-		piDistribution = Normal(mu, std)
+		pi_distribution = Normal(mu, std)
 
 		if deterministic:
 			# only used for evaluating policy at test time.
-			piAction = mu
+			pi_action = mu
 		else:
-			piAction = piDistribution.rsample()
+			pi_action = pi_distribution.rsample()
 
-		if withLogProb:
+		if with_log_prob:
 			# Appendix C
-			logProPi = piDistribution.log_prob(piAction).sum(dim=-1)
-			logProPi -= (2 * (np.log(2) - piAction - F.softplus(-2*piAction))).sum(dim=-1)
+			log_pro_pi = pi_distribution.log_prob(pi_action).sum(dim=-1)
+			log_pro_pi -= (2 * (np.log(2) - pi_action - F.softplus(-2*pi_action))).sum(dim=-1)
 		else:
-			logProPi = None
+			log_pro_pi = None
 
-		piAction = torch.tanh(piAction)
-		piAction = self.actLimit * piAction
-		return piAction, logProPi
+		pi_action = torch.tanh(pi_action)
+		pi_action = self.act_limit * pi_action
+		return pi_action, log_pro_pi

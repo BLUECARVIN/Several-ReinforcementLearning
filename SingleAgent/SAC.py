@@ -17,78 +17,78 @@ from torch.optim import Adam
 class SAC:
 	def __init__(self,
 		env,
-		savePath,
-		actorCritic=ActorCritic.MLP_ActorCritic,
-		ACKwargs=dict(),
-		randomSeed=0,
-		stepsPerEpoch=4000,
-		maxEpochs=100,
-		replayBufferSize=int(1e6),
+		save_path,
+		actor_critic=ActorCritic.MLP_ActorCritic,
+		ac_kwargs=dict(),
+		random_seed=0,
+		steps_per_epoch=4000,
+		max_epochs=100,
+		replay_buffer_size=int(1e6),
 		gamma=0.99,
 		polyak=0.995,
 		lr=1e-3,
 		alpha=0.2,
-		batchSize=100,
-		startSteps=10000,
-		updateAfter=1000,
-		updateEvery=50,
-		numTestEpisodes=10,
-		maxEpochLen=1000,
-		saveFreq=1,
+		batch_size=100,
+		start_steps=10000,
+		update_after=1000,
+		update_every=50,
+		num_test_episodes=10,
+		max_epoch_len=1000,
+		save_freq=1,
 		**kwargs):
 
 		# set random seed
-		torch.manual_seed(randomSeed)
-		np.random.seed(randomSeed)
+		torch.manual_seed(random_seed)
+		np.random.seed(random_seed)
 
 		# set self parameter
-		self.ACKwargs = ACKwargs
-		self.stepsPerEpoch = stepsPerEpoch
-		self.maxEpochs = maxEpochs
-		self.replayBufferSize = replayBufferSize
+		self.ac_kwargs = ac_kwargs
+		self.steps_per_epoch = steps_per_epoch
+		self.max_epochs = max_epochs
+		self.replay_buffer_size = replay_buffer_size
 		self.gamma = gamma
 		self.polyak = polyak
 		self.lr = lr
 		self.alpha = alpha
-		self.batchSize = batchSize
-		self.startSteps = startSteps
-		self.updateAfter = updateAfter
-		self.updateEvery= updateEvery
-		self.numTestEpisodes = numTestEpisodes
-		self.maxEpochLen = maxEpochLen
-		self.savePath = Path(savePath)
-		self.saveFreq = saveFreq
+		self.batch_size = batch_size
+		self.start_steps = start_steps
+		self.update_after = update_after
+		self.update_every= update_every
+		self.num_test_episodes = num_test_episodes
+		self.max_epoch_len = max_epoch_len
+		self.save_path = Path(save_path)
+		self.save_freq = save_freq
 
 		# set env
 		self.env = env
-		self.testEnv = env
-		self.observationDim = env.observation_space.shape
-		self.actionDim = env.action_space.shape[0]
+		self.test_env = env
+		self.observation_dim = env.observation_space.shape
+		self.action_dim = env.action_space.shape[0]
 
 		# Action limit for clamping, assumes all dimension share the same bound
-		self.actionLimit = env.action_space.high[0]
+		self.action_limit = env.action_space.high[0]
 
 		# build AC learning network and target network
-		self.ac = actorCritic(env.observation_space, env.action_space, **ACKwargs).cuda()
-		self.acTarget = actorCritic(env.observation_space, env.action_space, **ACKwargs).cuda()
+		self.ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs).cuda()
+		self.ac_target = actor_critic(env.observation_space, env.action_space, **ac_kwargs).cuda()
 
 		# sync the parameters between two networks by hard-update
-		hard_update(self.acTarget, self.ac)
+		hard_update(self.ac_target, self.ac)
 
 		# Freeze target networks with respect to optimizers
-		for paras in self.acTarget.parameters():
+		for paras in self.ac_target.parameters():
 			paras.requires_grad = False
 
 		# List of parameters for both Q-Networks (for convenience)
-		self.qParams = itertools.chain(self.ac.q1.parameters(), self.ac.q2.parameters())
+		self.q_params = itertools.chain(self.ac.q1.parameters(), self.ac.q2.parameters())
 
 		# Set Memory ReplayBuffer
-		self.replayBuffer = ReplayBuffer.SAC_ReplayBuffer(observationDim=self.observationDim,
-			actionDim=self.actionDim, maxSize=replayBufferSize)
+		self.replayBuffer = ReplayBuffer.SAC_ReplayBuffer(observation_dim=self.observation_dim,
+			action_dim=self.action_dim, maxSize=replay_buffer_size)
 
 		# set opimizers
 		self.piOptimizer = Adam(self.ac.pi.parameters(), lr=self.lr)
-		self.qOptimizer = Adam(self.qParams, lr=self.lr)
+		self.qOptimizer = Adam(self.q_params, lr=self.lr)
 
 	# ===================================== Loss ========================================
 	# calculate loss of Q function
@@ -108,8 +108,8 @@ class SAC:
 			nextAction, logProbAction2 = self.ac.pi(nextObervation)
 
 			#Target Q-values
-			q1PiTarget = self.acTarget.q1(nextObervation, nextAction)
-			q2PiTarget = self.acTarget.q2(nextObervation, nextAction)
+			q1PiTarget = self.ac_target.q1(nextObervation, nextAction)
+			q2PiTarget = self.ac_target.q2(nextObervation, nextAction)
 			qPiTarget = torch.min(q1PiTarget, q2PiTarget)
 			backup = reward + self.gamma * (1 - done) * (qPiTarget - self.alpha * logProbAction2)
 
@@ -151,7 +151,7 @@ class SAC:
 		# ......
 
 		# Freeze Q networks, save resource
-		for p in self.qParams:
+		for p in self.q_params:
 			p.requires_grad = False
 
 		# run one gradient descent step for pi.
@@ -161,14 +161,14 @@ class SAC:
 		self.piOptimizer.step()
 
 		# Unfreeze Q-network, optimize it at next DDPG step
-		for p in self.qParams:
+		for p in self.q_params:
 			p.requires_grad = True
 
 		# wait for record
 		# ......
 
 		# Finally, update target networks by polyak averageing
-		soft_update(self.acTarget, self.ac, self.polyak)
+		soft_update(self.ac_target, self.ac, self.polyak)
 
  	# ============================ test ======================================
 	def get_action(self, observation, deterministic=False):
@@ -177,15 +177,15 @@ class SAC:
 
 	def test_agent(self, step=-1):
 		# print("begin to test at {} step".format(step))
-		for j in range(self.numTestEpisodes):
- 			observation = self.testEnv.reset()
+		for j in range(self.num_test_episodes):
+ 			observation = self.test_env.reset()
  			done = False
  			epochReward = 0
  			epochLength = 0
 
- 			while not(done or (epochLength == self.maxEpochLen)):
+ 			while not(done or (epochLength == self.max_epoch_len)):
  				# take deterministic actions at test time
- 				observation, reward, done, _ = self.testEnv.step(self.get_action(observation, True))
+ 				observation, reward, done, _ = self.test_env.step(self.get_action(observation, True))
  				epochReward += reward
  				epochLength += 1
 		# print("The epoch reward is {}, the epoch length is {}".format(epochReward, epochLength))
@@ -193,7 +193,7 @@ class SAC:
 
 	# ============================== train ====================================
 	def train(self):
-		totalSteps = self.stepsPerEpoch * self.maxEpochs
+		totalSteps = self.steps_per_epoch * self.max_epochs
 		# startTime = time.time()
 		# init env
 		observation = self.env.reset()
@@ -205,7 +205,7 @@ class SAC:
 
 		for t in tqdm.tqdm(range(totalSteps)):
 			# make actions
-			if t > self.startSteps:
+			if t > self.start_steps:
 				action = self.get_action(observation)
 			else:
 				action = self.env.action_space.sample()
@@ -215,7 +215,7 @@ class SAC:
 			epochReward += reward
 			epochLength += 1
 
-			done = False if epochLength==self.maxEpochLen else done
+			done = False if epochLength==self.max_epoch_len else done
 
 			# Store the state into replay buffer
 			self.replayBuffer.add(observation, action, reward, nextObervation, done)
@@ -223,7 +223,7 @@ class SAC:
 			observation = nextObervation
 
 			# end trajectory and init the env
-			if done or (epochLength == self.maxEpochLen):
+			if done or (epochLength == self.max_epoch_len):
 				# waite to be loged
 				# .....
 				observation = self.env.reset()
@@ -231,19 +231,19 @@ class SAC:
 				epochLength = 0
 
 			# update the network
-			if t >= self.updateAfter and t % self.updateEvery == 0:
-				for j in range(self.updateEvery):
-					batch = self.replayBuffer.sample_batch(self.batchSize)
+			if t >= self.update_after and t % self.update_every == 0:
+				for j in range(self.update_every):
+					batch = self.replayBuffer.sample_batch(self.batch_size)
 					self.update(data=batch)
 
 			# enc of epoch
-			if (t+1) % self.stepsPerEpoch == 0:
-				epoch = (t+1) // self.stepsPerEpoch
+			if (t+1) % self.steps_per_epoch == 0:
+				epoch = (t+1) // self.steps_per_epoch
 
 				# save model
-				if (epoch % self.saveFreq == 0) or (epoch == self.maxEpochs):
-					torch.save(self.acTarget.state_dict(), self.savePath/'modelStateDict.pt')
+				if (epoch % self.save_freq == 0) or (epoch == self.max_epochs):
+					torch.save(self.ac_target.state_dict(), self.save_path/'modelStateDict.pt')
 
 				# test
 				testReward = np.append(testReward, self.test_agent(t))
-				np.savez(self.savePath/'testReward.npz', hist=testReward)
+				np.savez(self.save_path/'testReward.npz', hist=testReward)

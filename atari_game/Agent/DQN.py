@@ -9,8 +9,9 @@ from torch.autograd import Variable
 import gym
 import numpy as np
 import random
-import Utils
+from Utils import hard_update
 from MLP import QNet
+import ReplayBuffer
 
 
 class DQNAgent(object):
@@ -70,4 +71,7 @@ class DQNAgent(object):
 		self.learning_Q = q_net(self.observation_dim, self.action_dim)
 		self.target_Q = q_net(self.observation_dim, self.action_dim)
 		# sync two networks' parameter
-		u
+		hard_update(self.target_Q, self.learning_Q)
+
+		# set replay buffer
+		replaybuffer = 

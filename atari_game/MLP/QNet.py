@@ -2,12 +2,12 @@ from torch import nn
 from torch.nn import functional as F
 
 
-class DQN(nn.Module):
+class QNet(nn.Module):
 	def __init__(self, input_channel=4, num_actions=18):
 		"""
 		Create a MLP Q network as described in DQN paper
 		"""
-		super(DQN, self).__init__()
+		super(QNet, self).__init__()
 		self.conv1 = nn.Conv2d(input_channel, 32, kernel_size=8, stride=4)
 		self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
 		self.conv3 = nn.Conv2d(64, kernel_size=3, stride=1)

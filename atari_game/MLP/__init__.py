@@ -1,1 +1,1 @@
-from normal_q_net import *
+from .normal_q_net import *

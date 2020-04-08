@@ -1,1 +1,1 @@
-from normal_buffer import *
+from .normal_buffer import *

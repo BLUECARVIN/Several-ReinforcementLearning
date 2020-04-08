@@ -1,5 +1,5 @@
 import numpy as np
-
+import gym
 
 def hard_update(target, source):
 	'''
@@ -40,3 +40,14 @@ def one_hot(actions, numActions):
 	labels = actions.reshape(1, -1)[0]
 	oneHotCode = np.eye(numActions)[labels]
 	return oneHotCode
+
+
+def get_wrapper_by_name(env, classname):
+    currentenv = env
+    while True:
+        if classname in currentenv.__class__.__name__:
+            return currentenv
+        elif isinstance(env, gym.Wrapper):
+            currentenv = currentenv.env
+        else:
+            raise ValueError("Couldn't find wrapper named %s"%classname)

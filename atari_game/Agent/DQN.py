@@ -12,13 +12,15 @@ import pickle
 import gym
 import numpy as np
 import random
+from PIL import Image
+
 from Utils import hard_update
 from MLP import QNet
 import ReplayBuffer
 
 
 class DQNAgent(object):
-	def __init(self, 
+	def __init__(self, 
 		env,
 		random_seed,
 		save_path,
@@ -27,14 +29,14 @@ class DQNAgent(object):
 		batch_size=64,
 		initial_eps = 0.5,
 		end_eps = 0.01,
-		eps_plan = 50000,
+		eps_plan = 5000000,
 		lr=1e-3,
 		learning_start=50000,
 		learning_freq=4,
 		frame_history_len=4,
 		target_update_freq=10000,
-		memory_size=1e6,
-		max_steps = 1e7,
+		memory_size=1000000,
+		max_steps = 10000000,
 		**kwargs):
 		"""
 		DQN Agent
@@ -71,7 +73,7 @@ class DQNAgent(object):
 			self.observation_dim = env.observation_space.shape[0]
 		else:
 			img_h, img_w, img_c = env.observation_space.shape
-			self.observation_dim = frame_history_len * img_c
+			self.observation_dim = frame_history_len 
 		# get action dim
 		self.action_dim = env.action_space.n
 
@@ -99,6 +101,7 @@ class DQNAgent(object):
 		self.learning_freq = learning_freq
 		self.frame_history_len = frame_history_len
 		self.max_steps = max_steps
+		self.target_update_freq = target_update_freq
 		self.steps = 0
 
 		# set the eps
@@ -126,34 +129,50 @@ class DQNAgent(object):
 			self.eps = self.end_eps
 
 
+	def pre_process(self, observation):
+		img = np.reshape(observation, [210, 160, 3]).astype(np.float32)
+		img = img[:, :, 0] * 0.299 + img[:, :, 1] * 0.587 + img[:, :, 2] * 0.114
+		img = Image.fromarray(img)
+		resized_screen = img.resize((84, 110), Image.BILINEAR)
+		resized_screen = np.array(resized_screen)
+		x_t = resized_screen[18:102, :]
+		x_t = np.reshape(x_t, [84, 84, 1])
+		return x_t.astype(np.uint8)
+
 	# ============================= evaluate ======================================
 	def get_exploration_action(self, state):
 		sample = random.random()
 		self.cal_eps()
 		if sample > self.eps:
-			state = torch.from_numpy(state, dtype=torch.float32).unsqueeze(0) / 255.0
+			state = torch.from_numpy(state).type(torch.float32).unsqueeze(0) / 255.0
 			state = Variable(state).cuda()
-			action = torch.argmax(self.learning_Q(state)).detach().cpu()
+			# action = torch.argmax(self.learning_Q(state)).detach().cpu()
+			action = torch.argmax(self.learning_Q(state), dim=1).cpu()
+			# action = self.learning_Q(state).data.max(1)[1].cpu()
 		else:
-			action = int(np.random.uniform() * self.action_dim)
-			action = torch.from_numpy(action, dtype=torch.int32)
+			# action = int(np.random.uniform() * self.action_dim)
+			# action = torch.from_numpy(action)
+			action = torch.IntTensor([random.randrange(self.action_dim)])
 		return action
 
 
 	def get_exploitation_action(self, state):
-		state = torch.from_numpy(state, dtype=torch.float32).unsqueeze(0) / 255.0
+		state = torch.from_numpy(state).type(torch.float32).unsqueeze(0) / 255.0
 		state = Variable(state).cuda()
 		action = torch.argmax(self.target_Q(state)).detach().cpu()
 		return action
 
 	# ============================= train ======================================
-	def train(self, is_render=False):
+	def train(self, is_render=False, save_path=None):
 		last_observation = self.env.reset()
+		last_observation = self.pre_process(last_observation)
 		mean_episode_reward = -float('nan')
 		best_mean_episode_reward = -float('inf')
 		log = {'mean_episode_reward':[], 'best_mean_episode_reward':[]}
 		num_param_updates = 0
-		while self.stpes < self.max_steps:
+		episode_rewards = []
+		one_episode_reward = []
+		while self.steps < self.max_steps:
 			# store lastest observation 
 			last_index = self.replay_buffer.store_frame(last_observation)
 
@@ -162,10 +181,12 @@ class DQNAgent(object):
 			if self.steps < self.learning_start:
 				action = random.randrange(self.action_dim)
 			else:
-				action = self.get_exploration_action(recent_observation)[0,0].numpy()
+				action = self.get_exploration_action(recent_observation)[0].numpy()
 
 			# make a step
 			observation, reward, done, _ = self.env.step(action)
+			observation = self.pre_process(observation)
+			one_episode_reward.append(reward)
 			if is_render:
 				self.env.render()
 
@@ -176,7 +197,11 @@ class DQNAgent(object):
 			# if done, restat env
 			if done:
 				observation = self.env.reset()
+				observation = self.pre_process(observation)
+				episode_rewards.append(np.sum(one_episode_reward))
+				one_episode_reward = []
 			last_observation = observation
+
 
 			# perform experience replay and train the network
 			if ((self.steps > self.learning_start) and 
@@ -185,25 +210,23 @@ class DQNAgent(object):
 				# get batch from replay buffer
 				obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.replay_buffer.sample_batch(self.batch_size)
 				# turn all data to tensor
-				obs_batch = Variable(torch.from_numpy(obs_batch, dtype=torch.float32) / 255.0).cuda()
-				act_batch = Variable(torch.from_numpy(act_batch, dtype=torch.long)).cuda()
-				rew_batch = Variable(torch.from_numpy(rew_batch, dtype=torch.float32)).cuda()
-				next_obs_batch = Variable(torch.from_numpy(next_obs_batch, dtype=torch.float32) / 255.).cuda()
-				not_done_mask = Variable(torch.from_numpy(1 - done_mask, dtype=torch.float32)).cuda()
+				obs_batch = Variable(torch.from_numpy(obs_batch).type(torch.float32) / 255.0).cuda()
+				act_batch = Variable(torch.from_numpy(act_batch).long()).cuda()
+				rew_batch = Variable(torch.from_numpy(rew_batch).type(torch.float32)).cuda()
+				next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(torch.float32) / 255.).cuda()
+				not_done_mask = Variable(torch.from_numpy(1 - done_mask).type(torch.float32)).cuda()
 
 
 				# ================================ calculate bellman =========================================
 				# get current Q value
 				current_q_value = self.learning_Q(obs_batch).gather(1, act_batch.unsqueeze(1))
 				# compute next q value based on which action gives max Q values
-				next_max_q = self.target_Q(next_obs_batch).detach().max(1)[0]
+				next_max_q = self.target_Q(next_obs_batch).max(1)[0]
 				next_q_values = not_done_mask * next_max_q
-
 				# compute the target of the current q values
 				target_q_values = rew_batch + (self.gamma * next_q_values)
-
 				# compute bellman error
-				bellman_error = target_q_values - current_q_value
+				bellman_error = target_q_values.view(-1, 1) - current_q_value
 				# clip bellman error between [-1, 1]
 				clipped_bellman_error = bellman_error.clamp(-1, 1)
 				# * -1
@@ -211,16 +234,15 @@ class DQNAgent(object):
 
 				# optimize
 				self.optimizer.zero_grad()
-				current_q_value.backward(bellman_loss.data.unsqueeze(1))
+				current_q_value.backward(bellman_loss.data)
 				self.optimizer.step()
 
 				# update steps
 				num_param_updates += 1
 				# update network
-				if self.num_param_updates % self.target_update_freq == 0:
+				if num_param_updates % self.target_update_freq == 0:
 					hard_update(self.target_Q, self.learning_Q)
 
-			episode_rewards = self.env.get_episode_rewards()
 			if len(episode_rewards) > 0:
 				mean_episode_reward = np.mean(episode_rewards[-100:])
 			if len(episode_rewards) > 100:
@@ -239,3 +261,7 @@ class DQNAgent(object):
 
 				with open(self.save_path + 'log.pkl', 'wb') as f:
 					pickle.dump(log, f)
+
+				self.save_path('DQNtest', path=save_path)
+
+			self.steps += 1

@@ -3,7 +3,9 @@ sys.path.append("..")
 
 import Agent
 import gym
-
+import numpy as np
 
 env = gym.make('Pong-v0')
-# agent = Agent.DQN()
+# a = np.empty([1000000, 84, 84], dtype=np.uint8)
+agent = Agent.DQNAgent(env, 12, None, memory_size=1000, learning_start=1000)
+agent.train(is_render=True)

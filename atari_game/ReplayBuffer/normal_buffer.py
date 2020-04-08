@@ -77,7 +77,7 @@ class ReplayBuffer(object):
 		return obs_batch, act_batch, rew_batch, next_obs_batch, done_mask
 
 
-	def _sample_n_unique(sampling_f, n):
+	def _sample_n_unique(self, sampling_f, n):
 		"""
 		Helper function:
 			given a function and returns comparable objects, sample n such unique objects.
@@ -136,10 +136,10 @@ class ReplayBuffer(object):
 			frame = frame.transpose(2, 0, 1)
 
 		if self.obs is None:
-			self.obs = np.empty([self.size] + list(frame.shape), dtype=np.uint8)
-			self.action = np.empty([self.size], dtype=np.int32)
-			self.reward = np.empty([self.size], dtype=np.float32)
-			self.done = np.empty([self.size], dtype=np.bool)
+			self.obs = np.empty([self.max_size] + list(frame.shape), dtype=np.uint8)
+			self.action = np.empty([self.max_size], dtype=np.int32)
+			self.reward = np.empty([self.max_size], dtype=np.float32)
+			self.done = np.empty([self.max_size], dtype=np.bool)
 
 		self.obs[self.next_index] = frame
 

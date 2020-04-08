@@ -7,6 +7,8 @@ from torch.nn import functional as F
 from torch.autograd import Variable
 
 import os
+import copy
+import pickle
 import gym
 import numpy as np
 import random
@@ -31,7 +33,6 @@ class DQNAgent(object):
 		learning_freq=4,
 		frame_history_len=4,
 		target_update_freq=10000,
-		test_freq = 5000,
 		memory_size=1e6,
 		max_steps = 1e7,
 		**kwargs):
@@ -64,6 +65,7 @@ class DQNAgent(object):
 
 		# set env
 		self.env = env
+		self.test_env = copy.deepcopy(env)
 		# get observation dim
 		if len(env.observation_space.shape) == 1: # running on low-dimension observation(RAM)
 			self.observation_dim = env.observation_space.shape[0]
@@ -98,7 +100,6 @@ class DQNAgent(object):
 		self.frame_history_len = frame_history_len
 		self.max_steps = max_steps
 		self.steps = 0
-		self.test_freq = test_freq
 
 		# set the eps
 		self.eps = self.initial_eps
@@ -148,9 +149,9 @@ class DQNAgent(object):
 	# ============================= train ======================================
 	def train(self, is_render=False):
 		last_observation = self.env.reset()
-		# mean_episode_reward = -float('nan')
-		# best_mean_episode_reward = -float('inf')
-		log = {'steps':[], 'mean_episode_reward':[]}
+		mean_episode_reward = -float('nan')
+		best_mean_episode_reward = -float('inf')
+		log = {'mean_episode_reward':[], 'best_mean_episode_reward':[]}
 		num_param_updates = 0
 		while self.stpes < self.max_steps:
 			# store lastest observation 
@@ -214,11 +215,27 @@ class DQNAgent(object):
 				self.optimizer.step()
 
 				# update steps
-				self.steps += 1
 				num_param_updates += 1
 				# update network
 				if self.num_param_updates % self.target_update_freq == 0:
 					hard_update(self.target_Q, self.learning_Q)
 
-			# test target Q networks 
-			if (self.steps>learning_start) and (self.steps % )
+			episode_rewards = self.env.get_episode_rewards()
+			if len(episode_rewards) > 0:
+				mean_episode_reward = np.mean(episode_rewards[-100:])
+			if len(episode_rewards) > 100:
+				best_mean_episode_reward = max(best_mean_episode_reward, mean_episode_reward)
+
+			log['mean_episode_reward'].append(mean_episode_reward)
+			log['best_mean_episode_reward'].append(best_mean_episode_reward)
+
+			if self.steps % 5000 == 0 and self.steps > self.learning_start:
+				print("Steps: {}".format(self.steps))
+				print("mean reward (lastest 100 episodes): {:.4f}".format(mean_episode_reward))
+				print("best mean reward: {:.4f}".format(best_mean_episode_reward))
+				print("episodes: {}".format(len(episode_rewards)))
+				print("exploration: {:.4f}".format(self.eps))
+				sys.stdout.flush()
+
+				with open(self.save_path + 'log.pkl', 'wb') as f:
+					pickle.dump(log, f)

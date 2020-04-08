@@ -29,7 +29,7 @@ class DQNAgent(object):
 		batch_size=64,
 		initial_eps = 0.5,
 		end_eps = 0.01,
-		eps_plan = 5000000,
+		eps_plan = 500000,
 		lr=1e-3,
 		learning_start=50000,
 		learning_freq=4,
@@ -103,6 +103,7 @@ class DQNAgent(object):
 		self.max_steps = max_steps
 		self.target_update_freq = target_update_freq
 		self.steps = 0
+		self.save_path = save_path
 
 		# set the eps
 		self.eps = self.initial_eps
@@ -163,7 +164,7 @@ class DQNAgent(object):
 		return action
 
 	# ============================= train ======================================
-	def train(self, is_render=False, save_path=None):
+	def train(self, is_render=False, path=None):
 		last_observation = self.env.reset()
 		last_observation = self.pre_process(last_observation)
 		mean_episode_reward = -float('nan')
@@ -262,6 +263,6 @@ class DQNAgent(object):
 				with open(self.save_path + 'log.pkl', 'wb') as f:
 					pickle.dump(log, f)
 
-				self.save_path('DQNtest', path=save_path)
+				self.save_model('DQNtest', path=path)
 
 			self.steps += 1

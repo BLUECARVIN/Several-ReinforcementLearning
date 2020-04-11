@@ -26,11 +26,11 @@ class DQNAgent(object):
 		save_path,
 		q_net=QNet,
 		gamma=0.99,
-		batch_size=64,
+		batch_size=32,
 		initial_eps = 0.5,
 		end_eps = 0.01,
 		eps_plan = 500000,
-		lr=1e-3,
+		lr=0.00025,
 		learning_start=50000,
 		learning_freq=4,
 		frame_history_len=4,
@@ -87,7 +87,7 @@ class DQNAgent(object):
 		self.replay_buffer = ReplayBuffer.ReplayBuffer(memory_size, frame_history_len)
 
 		# define learning Q network's optimizer
-		self.optimizer = torch.optim.Adam(self.learning_Q.parameters(), lr=lr)
+		self.optimizer = torch.optim.RMSprop(self.learning_Q.parameters(), lr=lr, eps=0.01)
 		# define loss function
 		self.loss_func = nn.MSELoss()
 
@@ -231,11 +231,11 @@ class DQNAgent(object):
 				# clip bellman error between [-1, 1]
 				clipped_bellman_error = bellman_error.clamp(-1, 1)
 				# * -1
-				bellman_loss = -1. * clipped_bellman_error
+				bellman_d = -1. * clipped_bellman_error
 
 				# optimize
 				self.optimizer.zero_grad()
-				current_q_value.backward(bellman_loss.data)
+				current_q_value.backward(bellman_d.data)
 				self.optimizer.step()
 
 				# update steps

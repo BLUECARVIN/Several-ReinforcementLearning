@@ -27,8 +27,8 @@ class DQNAgent(object):
 		q_net=QNet,
 		gamma=0.99,
 		batch_size=32,
-		initial_eps = 0.5,
-		end_eps = 0.01,
+		initial_eps = 1.0,
+		end_eps = 0.1,
 		eps_plan = 500000,
 		lr=0.00025,
 		learning_start=50000,
@@ -173,6 +173,7 @@ class DQNAgent(object):
 		num_param_updates = 0
 		episode_rewards = []
 		one_episode_reward = []
+		loss = []
 		while self.steps < self.max_steps:
 			# store lastest observation 
 			last_index = self.replay_buffer.store_frame(last_observation)
@@ -228,6 +229,7 @@ class DQNAgent(object):
 				target_q_values = rew_batch + (self.gamma * next_q_values)
 				# compute bellman error
 				bellman_error = target_q_values.view(-1, 1) - current_q_value
+				loss.append(bellman_error.detach().cpu().numpy())
 				# clip bellman error between [-1, 1]
 				clipped_bellman_error = bellman_error.clamp(-1, 1)
 				# * -1
@@ -258,7 +260,10 @@ class DQNAgent(object):
 				print("best mean reward: {:.4f}".format(best_mean_episode_reward))
 				print("episodes: {}".format(len(episode_rewards)))
 				print("exploration: {:.4f}".format(self.eps))
+				print("loss: {:.4f}".format(np.mean(loss)))
 				sys.stdout.flush()
+
+				loss = []
 
 				with open(self.save_path + 'log.pkl', 'wb') as f:
 					pickle.dump(log, f)

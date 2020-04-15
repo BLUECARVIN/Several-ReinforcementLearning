@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from torch.nn import functional as F
 
@@ -21,3 +22,26 @@ class QNet(nn.Module):
 		x = F.relu(self.fc1(x.flatten(start_dim=1)))
 		x = self.fc2(x)
 		return x
+
+class DuelQNet(nn.Module):
+	def __init__(self, input_channel=4, num_actions=18):
+		"""
+		Create a Dueling Q network for atari
+		"""
+		super(DuelQNet, self).__init__()
+		self.conv1 = nn.Conv2d(input_channel, 32, kernel_size=8, stride=4)
+		self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+		self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+		self.fc1 = nn.Linear(7*7*64, 512)
+		self.fc_a = nn.Linear(512, num_actions)
+		self.fc_v = nn.Linear(512, 1)
+
+	def forward(self, x):
+		x = F.relu(self.conv1(x))
+		x = F.relu(self.conv2(x))
+		x = F.relu(self.conv3(x))
+		x = F.relu(self.fc1(x.flatten(start_dim=1)))
+		V = self.fc_v(x)
+		A = self.fc_a(x)
+		Q = V + (A - A.mean(dim=1).view(-1, 1))
+		return Q

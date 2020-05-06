@@ -274,3 +274,43 @@ class DoubleDQNAgent(object):
 				self.save_model('DQNtest', path=path)
 
 			self.steps += 1
+		
+		# =================================== test ===============================================
+		def test(self, path, epoch, is_render=False):
+			self.load_model(path)
+			last_observation = self.env.reset()
+			last_observation = self.pre_process(last_observation)
+			mean_episode_reward = -float('nan')
+			log = {'mean_episode_reward':[]}
+			episode_rewards = []
+			one_episode_reward = []
+			loss = []
+			done_epoch = 0
+			for i in range(epoch):
+				done = False
+				while not done:
+					# store lastest observation
+					last_index = self.replay_buffer.store_frame(last_observation)
+					recent_observation = self.replay_buffer.store_frame(last_observation)
+
+					# choose the action by ste strategy
+					action = self.get_exploitation_action(recent_observation)[0].numpy()
+
+					# make a step
+					observation, reward, done, _ = self.env.step(action)
+					observation = self.pre_process(observation)
+					one_episode_reward.append(reward)
+					if is_render:
+						self.env.render()
+					self.replay_buffer.store_effect(last_index, action, reward, done)
+					if done:
+						observation = self.env.reset()
+						observation = self.pre_process(observation)
+						print("For the {}th epoch: ".format(i))
+						print("Agent has been taken {} steps, and the total reward is {:.2f}.".format(len(one_episode_reward), sum(one_episode_reward)))
+						one_episode_reward = []
+			print("Done!")
+			
+
+
+

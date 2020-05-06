@@ -129,3 +129,4 @@ dmypy.json
 *.npz
 *.pkl
 modelStateDict.pt
+.vscode/

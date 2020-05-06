@@ -310,6 +310,7 @@ class DoubleDQNAgent(object):
 					print("Agent has been taken {} steps, and the total reward is {:.2f}.".format(len(one_episode_reward), sum(one_episode_reward)))
 					one_episode_reward = []
 		print("Done!")
+		env.close()
 			
 
 

@@ -7,6 +7,7 @@ from ReplayBuffer.ppo_buffer import PPOSimplestBuffer
 import torch 
 from torch import nn
 from torch.optim import optimizer
+import os 
 
 import gym
 import copy
@@ -21,7 +22,7 @@ class PPOAgent(object):
                  save_path,
                  AC=ActorCritic,
                  gamma=0.99,
-                 lr=2.e-3,
+                 lr=2e-3,
                  betas=(0.9, 0.999),
                  learning_epoch=4,
                  eps_clip=0.2,
@@ -31,7 +32,7 @@ class PPOAgent(object):
                  max_timestep=300,
                  latent_dim=64,
                  learning_freq=2000,
-                 solved_reward=230,
+                 solved_reward=145,
                  **kwargs):
         """
         PPOAgent
@@ -93,12 +94,12 @@ class PPOAgent(object):
             self.save_path = path     
         if not os.path.isdir(self.save_path):
             os.makedirs(self.save_path)
-        torch.save(self.target_Q.state_dict(), self.save_path + name + '.pt')
+        torch.save(self.target_policy.state_dict(), self.save_path + name + '.pt')
         print("The target model's parameters have been saved sucessfully!")
 
     def load_model(self, file_path):
-        self.target_Q.load_state_dict(torch.load(file_path))
-        hard_update(self.learning_Q, self.target_Q)
+        self.target_policy.load_state_dict(torch.load(file_path))
+        hard_update(self.learning_policy, self.target_policy)
         print("The models' parameters have been loaded sucessfully!")
 
     # ======================== training ================
@@ -114,7 +115,7 @@ class PPOAgent(object):
         
         # Normalizing the rewards:
         rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        rewards = (rewards - rewards) / (rewards.std() + 1e-5)
+        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
 
         # convert list to tensor
         old_states = torch.stack(self.replay_buffer.states).to(self.device).detach()
@@ -147,9 +148,9 @@ class PPOAgent(object):
         timestep = 0
         for episode in range(self.max_episodes):
             state = self.env.reset()
+            # print('now is {} episode'.format(episode))
             for t in range(self.max_timestep):
                 timestep += 1
-
                 # Runing target policy
                 action = self.target_policy.act(state, self.replay_buffer)
                 state, reward, done, _ = self.env.step(action)
@@ -161,7 +162,7 @@ class PPOAgent(object):
                 # update 
                 if timestep % self.learning_freq == 0:
                     self.update()
-                    self.replay_buffer.clear_memory()
+                    self.replay_buffer.clear_buffer()
                     timestep = 0
                 
                 running_reward += reward
@@ -172,17 +173,19 @@ class PPOAgent(object):
                     break
             avg_length += t
 
-        # stop training condition
-        if running_reward > (self.log_interval * solved_reward):
-            self.save_model("best_model.py", self.save_path)
-            print("Training is done")
+            # stop training condition
+            if running_reward > (self.log_interval * self.solved_reward):
+                self.save_model("best_model.py", self.save_path)
+                print("Training is done")
+                break
 
-        # logging
-        if episode % self.log_interval == 0:
-            avg_length = int(avg_length / self.log_interval)
-            running_reward = int((running_reward / self.log_interval))
+            # logging
+            if episode % self.log_interval == 0:
+                avg_length = int(avg_length / self.log_interval)
+                running_reward = int((running_reward / self.log_interval))
 
-            print('At {} episode, the avg lengh is {}, the mean_reward is {}'.format(episode, avg_length, running_reward))
-            running_reward = 0
-            avg_length = 0
+                print('At {} episode, the avg lengh is {}, the mean_reward is {}'.format(episode, avg_length, running_reward))
+                running_reward = 0
+                avg_length = 0
+
 

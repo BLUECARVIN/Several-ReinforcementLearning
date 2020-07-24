@@ -18,8 +18,8 @@ import random
 class PPOAgent(object):
     def __init__(self,
                  env,
-                 random_seed,
                  save_path,
+                 random_seed=None,
                  AC=ActorCritic,
                  gamma=0.99,
                  lr=2e-3,
@@ -28,9 +28,9 @@ class PPOAgent(object):
                  eps_clip=0.2,
                  log_interval=20,
                  device='cuda:0',
-                 max_episodes=50000,
+                 max_episodes=50000, 
                  max_timestep=300,
-                 latent_dim=64,
+                 latent_dim=[64, 32],
                  learning_freq=2000,
                  solved_reward=145,
                  **kwargs):
@@ -45,19 +45,25 @@ class PPOAgent(object):
         self.env = env
         self.test_env = copy.deepcopy(env)
         
-        # discrete environment
+        # value type observation environment
         assert type(env.observation_space) == gym.spaces.Box
-        assert type(env.action_space) == gym.spaces.Discrete
 
         # fix random seed
-        torch.manual_seed(random_seed)
-        np.random.seed(random_seed)
-        random.seed(random_seed)
+        if random_seed:
+            torch.manual_seed(random_seed)
+            np.random.seed(random_seed)
+            random.seed(random_seed)
+        if isinstance(env.observation_space, gym.spaces.Box):
+            self.state_dim = env.observation_space.shape[0]
+        if isinstance(env.action_space, gym.spaces.Discrete):
+            print(1)
+            self.action_dim = env.action_space.n
+            self.env_type = 'discrete'
+        elif isinstance(env.action_space, gym.spaces.Box):
+            print(2)
+            self.action_dim = env.action_space.shape[0]
+            self.env_type = 'continuous'
 
-        # To DO 
-        # now is just for LunarLander-v2
-        self.state_dim = env.observation_space.shape[0]
-        self.action_dim = env.action_space.n
 
         # training parameters
         self.lr = lr
@@ -77,8 +83,18 @@ class PPOAgent(object):
         self.save_path = save_path
         self.device = device
 
-        self.learning_policy = AC(self.state_dim, self.action_dim, self.latent_dim, device=self.device)
-        self.target_policy = AC(self.state_dim, self.action_dim, self.latent_dim, device=self.device)
+        print(self.env_type)
+
+        self.learning_policy = AC(self.state_dim, 
+                                  self.action_dim,
+                                  self.latent_dim, 
+                                  device=self.device, 
+                                  env_type=self.env_type)
+        self.target_policy = AC(self.state_dim, 
+                                self.action_dim, 
+                                self.latent_dim, 
+                                device=self.device,
+                                env_type=self.env_type)
         self.target_policy.load_state_dict(self.learning_policy.state_dict())
 
         self.optimizer = torch.optim.Adam(self.learning_policy.parameters(), lr=self.lr, betas=self.betas)
@@ -101,6 +117,13 @@ class PPOAgent(object):
         self.target_policy.load_state_dict(torch.load(file_path))
         hard_update(self.learning_policy, self.target_policy)
         print("The models' parameters have been loaded sucessfully!")
+    
+    def select_action(self, state, memory):
+        if self.env_type == 'continuous':
+            state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
+            return self.target_policy.act(state, memory).cpu().data.numpy().flatten()
+        if self.env_type == 'discrete':
+            return self.target_policy.act(state, memory)
 
     # ======================== training ================
     def update(self):
@@ -118,9 +141,14 @@ class PPOAgent(object):
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
 
         # convert list to tensor
-        old_states = torch.stack(self.replay_buffer.states).to(self.device).detach()
-        old_actions = torch.stack(self.replay_buffer.actions).to(self.device).detach()
-        old_logprobs = torch.stack(self.replay_buffer.logprobs)
+        if self.env_type == 'discrete':
+            old_states = torch.stack(self.replay_buffer.states).to(self.device).detach()
+            old_actions = torch.stack(self.replay_buffer.actions).to(self.device).detach()
+            old_logprobs = torch.stack(self.replay_buffer.logprobs)
+        elif self.env_type == 'continuous':
+            old_states = torch.squeeze(torch.stack(self.replay_buffer.states).to(self.device), 1).detach()
+            old_actions = torch.squeeze(torch.stack(self.replay_buffer.actions).to(self.device), 1).detach()
+            old_logprobs = torch.squeeze(torch.stack(self.replay_buffer.logprobs), 1).to(self.device).detach()
 
         # optimize policy
         for _ in range(self.learning_epoch):
@@ -139,6 +167,7 @@ class PPOAgent(object):
             self.optimizer.zero_grad()
             loss.mean().backward()
             self.optimizer.step()
+
         self.target_policy.load_state_dict(self.learning_policy.state_dict())
 
     def train(self, is_render=False, path=None):
@@ -146,13 +175,14 @@ class PPOAgent(object):
         running_reward = 0
         avg_length = 0
         timestep = 0
+        print("begin to train")
         for episode in range(self.max_episodes):
             state = self.env.reset()
             # print('now is {} episode'.format(episode))
             for t in range(self.max_timestep):
                 timestep += 1
                 # Runing target policy
-                action = self.target_policy.act(state, self.replay_buffer)
+                action = self.select_action(state, self.replay_buffer)
                 state, reward, done, _ = self.env.step(action)
 
                 # add to buffer
